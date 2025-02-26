@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { ref, onValue } from "firebase/database";
+import { ref, onValue, set } from "firebase/database";
 import { database } from "../firebase";
 import { motion } from "framer-motion";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from "recharts"; // For charts
@@ -13,6 +13,8 @@ function Dashboard() {
   const [distance, setDistance] = useState(null);
   const [lastUpdated, setLastUpdated] = useState(null);
   const [historicalData, setHistoricalData] = useState([]); // For historical data
+  const [ledState, setLedState] = useState(false);
+  const [ledBrightness, setLedBrightness] = useState(0);
 
   useEffect(() => {
     const sensors = [
@@ -21,6 +23,8 @@ function Dashboard() {
       { path: "/airQuality", setter: setAirQuality },
       { path: "/smokeLevel", setter: setSmokeLevel },
       { path: "/distance", setter: setDistance },
+      { path: "/led/state", setter: setLedState },
+      { path: "/led/brightness", setter: setLedBrightness },
     ];
 
     sensors.forEach(({ path, setter }) => {
@@ -46,7 +50,7 @@ function Dashboard() {
     if (value === null) return "loading";
     if (value < thresholds.safe) return "safe";
     if (value < thresholds.warning) return "warning";
-    return "danger";
+    return "warning";
   };
 
   const sensorStatus = {
@@ -54,6 +58,18 @@ function Dashboard() {
     humidity: getStatus(humidity, { safe: 50, warning: 70 }),
     airQuality: getStatus(airQuality, { safe: 50, warning: 80 }),
     smokeLevel: getStatus(smokeLevel, { safe: 20, warning: 50 }),
+  };
+
+  // Toggle LED state
+  const toggleLed = () => {
+    const newState = !ledState;
+    set(ref(database, "/led/state"), newState);
+  };
+
+  // Update LED brightness
+  const updateBrightness = (event) => {
+    const brightness = event.target.value;
+    set(ref(database, "/led/brightness"), parseInt(brightness));
   };
 
   return (
@@ -104,13 +120,16 @@ function Dashboard() {
           <div className="mt-4 h-4 bg-gray-700 rounded-full overflow-hidden relative">
             <motion.div
               className={`h-full rounded-full ${
-                sensorStatus.smokeLevel === "danger" ? "bg-red-600" : "bg-green-600"
+                smokeLevel > 80 ? "bg-red-600" : smokeLevel > 60 ? "bg-yellow-500" : "bg-green-600"
               }`}
               initial={{ width: 0 }}
               animate={{ width: `${smokeLevel || 0}%` }}
               transition={{ duration: 1 }}
             />
           </div>
+          {smokeLevel > 80 && (
+            <p className="text-lg font-semibold mt-2 text-red-500">🔥 Fire detected! Take action!</p>
+          )}
         </div>
 
         {/* Distance Card */}
@@ -126,6 +145,33 @@ function Dashboard() {
           {isObjectNear && (
             <p className="text-lg font-semibold mt-2">⚠️ Object Detected Check the Front Lawn!!</p>
           )}
+        </div>
+
+        LED Control
+        <div className="bg-gray-800 p-6 rounded-lg shadow-lg w-full max-w-5xl mt-6 text-center">
+          <h2 className="text-xl font-semibold">LED Control</h2>
+          <button
+            onClick={toggleLed}
+            className={`${
+              ledState ? "bg-green-500" : "bg-red-500"
+            } px-4 py-2 rounded-lg text-white font-bold mt-2`}
+          >
+            {ledState ? "Turn Off" : "Turn On"}
+          </button>
+          <div className="mt-4">
+            <label htmlFor="brightness" className="text-lg font-semibold">
+              Brightness: {ledBrightness}%
+            </label>
+            <input
+              type="range"
+              id="brightness"
+              min="0"
+              max="100"
+              value={ledBrightness}
+              onChange={updateBrightness}
+              className="w-full mt-2"
+            />
+          </div>
         </div>
 
         {/* Historical Data Chart */}
